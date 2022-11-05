@@ -1,0 +1,39 @@
+{
+  "name": "typedoc-plugin-regex-filter",
+  "version": "0.0.1",
+  "description": "A TypeDoc plugin that filters references by RegExp",
+  "main": "dist/index.js",
+  "files": [],
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:manual": "npm run build && typedoc --readme none --entryPointStrategy expand test/ && serve docs",
+    "test:manual-no-plugin": "npm run build && typedoc --readme none --entryPointStrategy expand --plugin none test/ && serve docs",
+    "prepack": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klinki/typedoc-plugin-regex-filter.git"
+  },
+  "keywords": [
+    "typedoc",
+    "plugin",
+    "typedocplugin",
+    "typedoc-plugin"
+  ],
+  "author": "David Klingenberg (https://github.com/klinki)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/klinki/typedoc-plugin-regex-filter/issues"
+  },
+  "homepage": "https://github.com/klinki/typedoc-plugin-regex-filter",
+  "peerDependencies": {
+    "typedoc": "0.22.x"
+  },
+  "devDependencies": {
+    "serve": "^13.0.2",
+    "typedoc": "^0.22.0",
+    "typedoc-plugin-remove-regex": ".",
+    "typescript": "^4.3.5"
+  }
+}
