@@ -5,9 +5,7 @@ import {
   Reflection,
   ReflectionFlag,
   DeclarationReflection,
-  ParameterReflection,
   ParameterType,
-  SignatureReflection,
 } from "typedoc";
 
 export type FilterScope = 'method'|'field'|'function'|'class'|'all';
@@ -20,7 +18,9 @@ export interface Configuration {
   logMatches: boolean;
 }
 
-function loadConfiguration(app: Readonly<Application>): Configuration {
+export type RuntimeConfiguration = Configuration & { regexObject: RegExp, scopeAll: boolean };
+
+function setupConfigDeclarations(app: Readonly<Application>) {
   app.options.addDeclaration({
     name: "removeRegex",
     help: "Regular expression used to match reflection names. Default ^_(.*)",
@@ -49,72 +49,70 @@ function loadConfiguration(app: Readonly<Application>): Configuration {
     name: "removeRegexLogMatches",
     help: "Log matches",
     type: ParameterType.Boolean,
-    defaultValue: true,
+    defaultValue: false,
   });
+}
 
-  return {
-    regex: app.options.getValue('removeRegex') as string,
+let configuration: RuntimeConfiguration|null = null;
+
+function loadConfiguration(app: Readonly<Application>): RuntimeConfiguration {
+  if (configuration !== null) {
+    return configuration;
+  }
+
+  const regexStr = app.options.getValue('removeRegex') as string;
+  const regex = new RegExp(regexStr);
+  const scope = ['all'];
+  const scopeAll = scope.includes('all');
+
+  configuration = {
+    regex: regexStr,
+    regexObject: regex,
+    scopeAll: scopeAll,
     scope: ['all'], // app.options.getValue('removeRegexScope') as FilterScope[],
     exclude: app.options.getValue('removeRegexExclude') as boolean,
     markAsPrivate: app.options.getValue('removeRegexMarkAsPrivate') as boolean,
     logMatches: app.options.getValue('removeRegexLogMatches') as boolean,
   };
+
+  return configuration;
 }
 
 export function load(app: Readonly<Application>) {
-  const config = loadConfiguration(app);
-  const regex = new RegExp(config.regex);
-  const scopeAll = config.scope.includes('all');
+  setupConfigDeclarations(app);
 
   const exclusionArray: Reflection[] = [];
 
-  const onRegexMatch = (reflection: Reflection) => {
+  const onRegexMatch = (config: Configuration, reflection: Reflection) => {
     if (config.logMatches) {
       const operation = config.exclude ? 'removing' : 'marking as private';
       app.logger.info(`[Regex Filter Plugin] ${operation}: ${reflection.name} from: ${reflection.parent?.name}`);
     }
 
-    if (config.markAsPrivate) {
-      reflection.setFlag(ReflectionFlag.Private);
-    } else if (config.exclude) {
+    if (config.exclude) {
       exclusionArray.push(reflection);
+    } else if (config.markAsPrivate) {
+      reflection.setFlag(ReflectionFlag.Private);
     }
   };
 
-  app.converter.on(Converter.EVENT_RESOLVE, (context: Context) => {
-      // if (app.options.getValue("plugin-option") === "something") {
-      //     // ...
-      // }
-
-      // console.log(context);
-  });
-
-  app.converter.on(Converter.EVENT_CREATE_PARAMETER, (context: Context, reflection: ParameterReflection) => {
-      if (reflection.name.startsWith('_')) {
-        // console.log(reflection.name);
-      }
-  });
-
-  app.converter.on(Converter.EVENT_CREATE_SIGNATURE, (context: Context, reflection: SignatureReflection) => {
-    if (reflection.name.startsWith('_')) {
-      // console.log('signature', reflection.name);
-    }
-  });
-
   app.converter.on(Converter.EVENT_CREATE_DECLARATION, (context: Context, reflection: DeclarationReflection) => {
-    if (reflection.name.match(regex)) {
-      onRegexMatch(reflection);
-      // if (config.markAsPrivate) {
-      //   reflection.flags.setFlag(ReflectionFlag.Private, true);
-      // }
-    }
+    const config = loadConfiguration(app);
+    const regex = config.regexObject;
 
-    // if (reflection.name.startsWith('_')) {
-    //   console.log('declaration', reflection.name);
-    // }
+    if (reflection.name.match(regex)) {
+      onRegexMatch(config, reflection);
+    }
   });
 
   app.converter.on(Converter.EVENT_RESOLVE_BEGIN, (context: Context) => {
+    const config = loadConfiguration(app);
+    app.logger.info(JSON.stringify(config));
+
+    if (config.exclude) {
+      app.logger.info(`Removing ${exclusionArray.length} items`);
+    }
+
     if (exclusionArray.length > 0) {
       exclusionArray.forEach(removedItem => {
         context.project.removeReflection(removedItem);
